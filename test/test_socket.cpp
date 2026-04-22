@@ -52,8 +52,23 @@ int main(int argc, char **argv)
         {
             CG_Client.mcfn_send("Helo form server");
             std::string data;
-            CG_Client.mcfn_recv(data,false);
-            std::cout << data << " getting from client";
+            while (true)
+            {
+                int da = CG_Client.mcfn_recv(data, false);
+                if (da > 0)
+                {
+                    std::cout << data << " getting from client" << std::endl;
+                }
+                else if (da == -2)
+                {
+                    std::cout << "Disconnected" << std::endl;
+                    break;
+                }
+            }
+            // CG_Client.mcfn_recv(data, true);
+            // std::cout << data << " getting from client";
+            // CG_Client.mcfn_recv(data, true);
+            // std::cout << data << " getting from client";
         }
         // }
     }
@@ -61,8 +76,14 @@ int main(int argc, char **argv)
     {
         CG_Socket.mcfn_connect("");
         std::string data;
-        CG_Socket.mcfn_recv(data);
-        // CG_Socket.mcfn_send("Welcome back");
+        if (CG_Socket.mcfn_recv(data) == -2)
+        {
+            std::cout << "DISCONNECT" << std::endl;
+            return 0;
+        }
+        CG_Socket.mcfn_send("Welcome back");
+
+        CG_Socket.mcfn_send("Welcome back 2");
         std::cout << data << " getting from server";
     }
     return 0;

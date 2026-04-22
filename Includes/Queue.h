@@ -49,7 +49,7 @@ public:
     }
     int getCount()  {
        std::lock_guard <std::mutex> lg(mu);
-       return size;
+       return data.size();
     }
     bool getElement(T & data, bool isWait=true) {
         if(isWait){

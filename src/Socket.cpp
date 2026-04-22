@@ -259,68 +259,128 @@ int Socket::mcfn_send(const std::string &buf)
 
 int Socket::mcfn_recv(std::string &buf, bool blocking)
 {
+    std::lock_guard<std::mutex> lg(mu);
+
+    buf.clear();
+
+    // -----------------------------
+    // Optional non-blocking check
+    // -----------------------------
+    if (!blocking)
+    {
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        FD_SET(iL_socket_fd, &readfds);
+
+        timeval tv{};
+        tv.tv_sec = 0;
+        tv.tv_usec = 0;
+
+        int ret = select(iL_socket_fd + 1, &readfds, nullptr, nullptr, &tv);
+
+        if (ret == 0)
+            return 0; // no data available now
+
+        if (ret < 0)
+            return -1; // select error
+    }
+
+    // -----------------------------
+    // Receive fixed 4-byte length
+    // -----------------------------
+    char len_buffer[5] = {0};
+    int received = 0;
+
+    while (received < 4)
+    {
+        int n = recv(iL_socket_fd,
+                     len_buffer + received,
+                     4 - received,
+                     0);
+
+        if (n == 0)
+            return -2; // disconnected
+
+        if (n < 0)
+        {
+#ifdef _WIN32
+            return -1;
+#else
+            if (errno == EINTR)
+                continue;
+
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                return 0;
+
+            return -1;
+#endif
+        }
+
+        received += n;
+    }
+
+    // -----------------------------
+    // Convert length
+    // -----------------------------
+    int length = 0;
+
     try
     {
-        std::lock_guard<std::mutex> lg(mu);
-
-        // 🔹 OPTIONAL: non-blocking behavior using select()
-        if (!blocking)
-        {
-            fd_set fds;
-            FD_ZERO(&fds);
-            FD_SET(iL_socket_fd, &fds);
-
-            struct timeval tv{};
-            tv.tv_sec = 0;
-            tv.tv_usec = 0;
-
-            int ret = select(iL_socket_fd + 1, &fds, NULL, NULL, &tv);
-
-            if (ret <= 0)
-                return 0; // no data, just return immediately
-        }
-
-        // 🔹 Step 1: Read length safely (loop)
-        char len_buffer[5] = {0};
-        int received = 0;
-
-        while (received < 4)
-        {
-            int n = recv(iL_socket_fd, len_buffer + received, 4 - received, 0);
-            if (n <= 0)
-                return -1;
-            received += n;
-        }
-
-        int length = std::stoi(len_buffer);
-
-        // 🔹 Send ACK
-        send(iL_socket_fd, "OK", 2, 0);
-
-        // 🔹 Step 2: Read actual data
-        std::vector<char> recvBuffer(length);
-        int total = 0;
-
-        while (total < length)
-        {
-            int bytes = recv(iL_socket_fd,
-                             recvBuffer.data() + total,
-                             length - total,
-                             0);
-
-            if (bytes <= 0)
-                return -1;
-            total += bytes;
-        }
-
-        buf.assign(recvBuffer.begin(), recvBuffer.end());
-        return total;
+        length = std::stoi(len_buffer);
     }
-    catch (const std::exception &e)
+    catch (...)
     {
-        std::cerr << e.what() << '\n';
-        return -1;
+        return -3; // invalid header
     }
+
+    if (length <= 0)
+        return -3;
+
+    // -----------------------------
+    // ACK back
+    // -----------------------------
+    int ack = send(iL_socket_fd, "OK", 2, 0);
+
+    if (ack <= 0)
+        return -2;
+
+    // -----------------------------
+    // Receive payload
+    // -----------------------------
+    std::vector<char> recvBuffer(length);
+    int total = 0;
+
+    while (total < length)
+    {
+        int n = recv(iL_socket_fd,
+                     recvBuffer.data() + total,
+                     length - total,
+                     0);
+
+        if (n == 0)
+            return -2; // disconnected mid-transfer
+
+        if (n < 0)
+        {
+#ifdef _WIN32
+            return -1;
+#else
+            if (errno == EINTR)
+                continue;
+
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                continue;
+
+            return -1;
+#endif
+        }
+
+        total += n;
+    }
+
+    buf.assign(recvBuffer.begin(), recvBuffer.end());
+
+    return total;
 }
 Socket::~Socket()
 {
