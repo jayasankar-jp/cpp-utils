@@ -1,10 +1,24 @@
 #include "Socket.h"
 #include "vector"
 #include <memory>
-int Socket::mcfn_create(const int &port)
+#ifdef _WIN32
+#define CLOSE_SOCKET closesocket
+#else
+#define CLOSE_SOCKET close
+#endif
+#ifndef _WIN32
+#include <errno.h>
+#endif
+Socket::Socket() : iL_socket_fd(INVALID_SOCKET) {};
+socket_t Socket::mcfn_create(const int &port)
 {
+
     try
     {
+#ifdef _WIN32
+        WSADATA wsa;
+        WSAStartup(MAKEWORD(2, 2), &wsa);
+#endif
         iL_socket_fd = socket(AF_INET, SOCK_STREAM, 0);
         address.sin_family = AF_INET;
         address.sin_port = htons(port);
@@ -96,10 +110,10 @@ int Socket::mcfn_accept(std::shared_ptr<Socket> &client)
             std::cerr << "Failed to accept";
             return -1;
         }
-        client= std::make_shared<Socket>();
+        client = std::make_shared<Socket>();
 
-         client->address = receive_addr;
-         client->iL_socket_fd = clientSocket;
+        client->address = receive_addr;
+        client->iL_socket_fd = clientSocket;
         return 1;
     }
     catch (const std::exception &e)
@@ -384,5 +398,14 @@ int Socket::mcfn_recv(std::string &buf, bool blocking)
 }
 Socket::~Socket()
 {
-    close(iL_socket_fd);
+
+    if (iL_socket_fd != INVALID_SOCKET)
+    {
+        CLOSE_SOCKET(iL_socket_fd);
+        iL_socket_fd = INVALID_SOCKET;
+    }
+
+#ifdef _WIN32
+    WSACleanup();
+#endif
 }
