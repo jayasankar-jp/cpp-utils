@@ -169,37 +169,44 @@ int Socket::mcfn_connect(const std::string &IP)
 //         return -1;
 //     }
 // }
-int Socket::mcfn_send(const std::string &buf)
+int Socket::mcfn_send(const std::string &buf, size_t size)
 {
     try
     {
         std::lock_guard<std::mutex> lg(mu);
-
-        // FIXED: always send 4-byte length (padded)
-        char len_buffer[4] = {0};
-        snprintf(len_buffer, sizeof(len_buffer), "%03d", (int)buf.size());
-
-        send(iL_socket_fd, len_buffer, 4, 0);
-
-        // FIXED: safe ACK read
-        char ack_buffer[3] = {0};
-        recv(iL_socket_fd, ack_buffer, 2, 0);
-
-        if (std::string(ack_buffer) == "OK")
+        if (size > 0)
         {
-            // FIXED: correct size + loop
-            int total = 0;
-            int len = buf.size();
+            // char buffer[10000];
+            send(iL_socket_fd, buf.c_str(), size, 0);
+        }
+        else
+        {
+            // FIXED: always send 4-byte length (padded)
+            char len_buffer[4] = {0};
+            snprintf(len_buffer, sizeof(len_buffer), "%03d", (int)buf.size());
 
-            while (total < len)
+            send(iL_socket_fd, len_buffer, 4, 0);
+
+            // FIXED: safe ACK read
+            char ack_buffer[3] = {0};
+            recv(iL_socket_fd, ack_buffer, 2, 0);
+
+            if (std::string(ack_buffer) == "OK")
             {
-                int sent = send(iL_socket_fd,
-                                buf.c_str() + total,
-                                len - total,
-                                0);
-                if (sent <= 0)
-                    return -1;
-                total += sent;
+                // FIXED: correct size + loop
+                int total = 0;
+                int len = buf.size();
+
+                while (total < len)
+                {
+                    int sent = send(iL_socket_fd,
+                                    buf.c_str() + total,
+                                    len - total,
+                                    0);
+                    if (sent <= 0)
+                        return -1;
+                    total += sent;
+                }
             }
         }
 
@@ -211,190 +218,144 @@ int Socket::mcfn_send(const std::string &buf)
         return -1;
     }
 }
-// int Socket::mcfn_recv(std::string &buf)
-// {
-//     try
-//     {
-//         std::lock_guard<std::mutex> lg(mu);
-//         char len_buffer[4];
-//         int bytes = recv(iL_socket_fd, len_buffer, 4, 0);
-//         int length = std::stoi(len_buffer);
-//         send(iL_socket_fd, "OK", 4, 0);
-//         char recvBuffer[length];
-//         bytes = recv(iL_socket_fd, recvBuffer, length, 0);
-//         buf = recvBuffer;
-//         return bytes;
-//     }
-//     catch (const std::exception &e)
-//     {
-//         std::cerr << e.what() << '\n';
-//         return -1;
-//     }
-// }
-// int Socket::mcfn_recv(std::string &buf)
-// {
-//     try
-//     {
-//         std::lock_guard<std::mutex> lg(mu);
 
-//         // FIXED: receive length safely
-//         char len_buffer[5] = {0}; // +1 for null
-//         recv(iL_socket_fd, len_buffer, 4, 0);
-
-//         int length = std::stoi(len_buffer);
-
-//         // send ACK properly
-//         send(iL_socket_fd, "OK", 2, 0);
-
-//         // FIXED: dynamic buffer
-//         std::vector<char> recvBuffer(length);
-
-//         int total = 0;
-//         while (total < length)
-//         {
-//             int bytes = recv(iL_socket_fd,
-//                              recvBuffer.data() + total,
-//                              length - total,
-//                              0);
-
-//             if (bytes <= 0) return -1;
-//             total += bytes;
-//         }
-
-//         buf.assign(recvBuffer.begin(), recvBuffer.end());
-//         return total;
-//     }
-//     catch (const std::exception &e)
-//     {
-//         std::cerr << e.what() << '\n';
-//         return -1;
-//     }
-// }
-
-int Socket::mcfn_recv(std::string &buf, bool blocking)
+int Socket::mcfn_recv(std::string &buf, bool blocking, size_t size)
 {
     std::lock_guard<std::mutex> lg(mu);
 
     buf.clear();
 
-    // -----------------------------
-    // Optional non-blocking check
-    // -----------------------------
-    if (!blocking)
+    if (size > 0)
     {
-        fd_set readfds;
-        FD_ZERO(&readfds);
-        FD_SET(iL_socket_fd, &readfds);
+        char buff[size];
+        int res = recv(iL_socket_fd,
+                       buff, sizeof(size),
+                       0);
 
-        timeval tv{};
-        tv.tv_sec = 0;
-        tv.tv_usec = 0;
-
-        int ret = select(iL_socket_fd + 1, &readfds, nullptr, nullptr, &tv);
-
-        if (ret == 0)
-            return 0; // no data available now
-
-        if (ret < 0)
-            return -1; // select error
+        buf.assign(buff);
+        return res;
     }
-
-    // -----------------------------
-    // Receive fixed 4-byte length
-    // -----------------------------
-    char len_buffer[5] = {0};
-    int received = 0;
-
-    while (received < 4)
+    else
     {
-        int n = recv(iL_socket_fd,
-                     len_buffer + received,
-                     4 - received,
-                     0);
-
-        if (n == 0)
-            return -2; // disconnected
-
-        if (n < 0)
+        // -----------------------------
+        // Optional non-blocking check
+        // -----------------------------
+        if (!blocking)
         {
-#ifdef _WIN32
-            return -1;
-#else
-            if (errno == EINTR)
-                continue;
+            fd_set readfds;
+            FD_ZERO(&readfds);
+            FD_SET(iL_socket_fd, &readfds);
 
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-                return 0;
+            timeval tv{};
+            tv.tv_sec = 0;
+            tv.tv_usec = 0;
 
-            return -1;
-#endif
+            int ret = select(iL_socket_fd + 1, &readfds, nullptr, nullptr, &tv);
+
+            if (ret == 0)
+                return 0; // no data available now
+
+            if (ret < 0)
+                return -1; // select error
         }
 
-        received += n;
-    }
+        // -----------------------------
+        // Receive fixed 4-byte length
+        // -----------------------------
+        char len_buffer[5] = {0};
+        int received = 0;
 
-    // -----------------------------
-    // Convert length
-    // -----------------------------
-    int length = 0;
-
-    try
-    {
-        length = std::stoi(len_buffer);
-    }
-    catch (...)
-    {
-        return -3; // invalid header
-    }
-
-    if (length <= 0)
-        return -3;
-
-    // -----------------------------
-    // ACK back
-    // -----------------------------
-    int ack = send(iL_socket_fd, "OK", 2, 0);
-
-    if (ack <= 0)
-        return -2;
-
-    // -----------------------------
-    // Receive payload
-    // -----------------------------
-    std::vector<char> recvBuffer(length);
-    int total = 0;
-
-    while (total < length)
-    {
-        int n = recv(iL_socket_fd,
-                     recvBuffer.data() + total,
-                     length - total,
-                     0);
-
-        if (n == 0)
-            return -2; // disconnected mid-transfer
-
-        if (n < 0)
+        while (received < 4)
         {
+            int n = recv(iL_socket_fd,
+                         len_buffer + received,
+                         4 - received,
+                         0);
+
+            if (n == 0)
+                return -2; // disconnected
+
+            if (n < 0)
+            {
 #ifdef _WIN32
-            return -1;
+                return -1;
 #else
-            if (errno == EINTR)
-                continue;
+                if (errno == EINTR)
+                    continue;
 
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-                continue;
+                if (errno == EAGAIN || errno == EWOULDBLOCK)
+                    return 0;
 
-            return -1;
+                return -1;
 #endif
+            }
+
+            received += n;
         }
 
-        total += n;
+        // -----------------------------
+        // Convert length
+        // -----------------------------
+        int length = 0;
+
+        try
+        {
+            length = std::stoi(len_buffer);
+        }
+        catch (...)
+        {
+            return -3; // invalid header
+        }
+
+        if (length <= 0)
+            return -3;
+
+        // -----------------------------
+        // ACK back
+        // -----------------------------
+        int ack = send(iL_socket_fd, "OK", 2, 0);
+
+        if (ack <= 0)
+            return -2;
+
+        // -----------------------------
+        // Receive payload
+        // -----------------------------
+        std::vector<char> recvBuffer(length);
+        int total = 0;
+
+        while (total < length)
+        {
+            int n = recv(iL_socket_fd,
+                         recvBuffer.data() + total,
+                         length - total,
+                         0);
+
+            if (n == 0)
+                return -2; // disconnected mid-transfer
+
+            if (n < 0)
+            {
+#ifdef _WIN32
+                return -1;
+#else
+                if (errno == EINTR)
+                    continue;
+
+                if (errno == EAGAIN || errno == EWOULDBLOCK)
+                    continue;
+
+                return -1;
+#endif
+            }
+
+            total += n;
+        }
+
+        buf.assign(recvBuffer.begin(), recvBuffer.end());
+
+        return total;
     }
-
-    buf.assign(recvBuffer.begin(), recvBuffer.end());
-
-    return total;
 }
 Socket::~Socket()
 {

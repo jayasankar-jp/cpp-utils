@@ -20,6 +20,8 @@ using socket_t = int;
 #define SOCKET_ERROR (-1)
 
 #endif
+
+// #define MAX_MSG_LEN 10000
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -38,7 +40,7 @@ public:
     int mcfn_accept(Socket &client);
     int mcfn_accept(std::shared_ptr<Socket> &client);
     int mcfn_connect(const std::string &IP = "");
-    int mcfn_send(const std::string &buf);
-    int mcfn_recv(std::string &buf, bool blocking = true);
+    int mcfn_send(const std::string &buf, size_t size = 0);
+    int mcfn_recv(std::string &buf, bool blocking = true, size_t size = 0);
 };
 #endif
