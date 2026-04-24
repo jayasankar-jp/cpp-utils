@@ -2,6 +2,7 @@
 #include <string.h>
 #include <iostream>
 #include <thread>
+#include <Queue.h>
 #define SERVER 0
 #define CLINET 1
 int mode = SERVER;
