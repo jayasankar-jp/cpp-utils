@@ -91,6 +91,7 @@ public:
             return true;
         }
     }
+    Queue() = default;
     Queue(const Queue &) = delete;
     Queue &operator=(const Queue &) = delete;
 };
