@@ -39,6 +39,27 @@ public:
                 if (b_shutdown)
                     return false;
 
+                data.push_back(cl_data);
+            }
+            cv.notify_one();
+            return true;
+        }
+        catch (...)
+        {
+            return false;
+        }
+        return true;
+    }
+    bool insert(T &&cl_data)
+    {
+        try
+        {
+
+            {
+                std::lock_guard<std::mutex> lg(mu);
+                if (b_shutdown)
+                    return false;
+
                 data.push_back(std::move(cl_data));
             }
             cv.notify_one();
