@@ -39,7 +39,7 @@ public:
                 if (b_shutdown)
                     return false;
 
-                data.push_back(cl_data);
+                data.push_back(std::move(cl_data));
             }
             cv.notify_one();
             return true;
