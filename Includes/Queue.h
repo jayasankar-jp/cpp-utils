@@ -86,9 +86,9 @@ public:
         std::lock_guard<std::mutex> lg(mu);
         return data.size();
     }
-    bool getElement(T &cl_data, bool isWait = true)
+    bool getElement(T &cl_data, int isWait = 0)
     {
-        if (isWait)
+        if (isWait == 0)
         {
             std::unique_lock<std::mutex> ul(mu);
             cv.wait(ul, [this]
@@ -100,7 +100,7 @@ public:
 
             return true;
         }
-        else
+        else if (isWait == 1)
         {
             std::lock_guard<std::mutex> lg(mu);
             if (data.empty())
@@ -109,6 +109,22 @@ public:
             }
             cl_data = std::move(data.front());
             data.pop_front();
+            return true;
+        }
+        else
+        {
+            std::unique_lock<std::mutex> ul(isWait);
+            cv.wait_for(ul,
+                        std::chrono::milliseconds(isWait),
+                        [this]
+                        {
+                            return !data.empty() || b_shutdown;
+                        });
+            if (data.empty())
+                return false;
+            cl_data = std::move(data.front());
+            data.pop_front();
+
             return true;
         }
     }
