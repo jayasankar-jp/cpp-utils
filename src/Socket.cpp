@@ -202,28 +202,7 @@ int Socket::mcfn_reconnect()
         return -1;
     }
 }
-// int Socket::mcfn_send(const std::string &buf)
-// {
-//     try
-//     {
-//         std::lock_guard<std::mutex> lg(mu);
-//         std::string len = std::to_string(buf.length());
-//         send(iL_socket_fd, len.c_str(), 4, 0);
-//         char ack_buffer[4];
-//         int bytes = recv(iL_socket_fd, ack_buffer, 4, 0);
-//         if (std::string(ack_buffer) == "OK")
-//         {
-//             send(iL_socket_fd, buf.c_str(), sizeof(buf.c_str()), 0);
-//         }
-//         return 1;
-//         // send(iL_socket_fd, buff.c_str(), msg.size(), 0)
-//     }
-//     catch (const std::exception &e)
-//     {
-//         std::cerr << e.what() << '\n';
-//         return -1;
-//     }
-// }
+
 int Socket::mcfn_close()
 {
     try
@@ -294,145 +273,17 @@ int Socket::mcfn_send(const std::string &buf, size_t size)
     }
 }
 
-// int Socket::mcfn_recv(std::string &buf, bool blocking, size_t size)
-// {
-//     std::lock_guard<std::mutex> lg(mu);
-
-//     buf.clear();
-
-//     if (size > 0)
-//     {
-//         char buff[size];
-//         int res = recv(iL_socket_fd,
-//                        buff, sizeof(size),
-//                        0);
-
-//         buf.assign(buff);
-//         return res;
-//     }
-//     else
-//     {
-//         // -----------------------------
-//         // Optional non-blocking check
-//         // -----------------------------
-//         if (!blocking)
-//         {
-//             fd_set readfds;
-//             FD_ZERO(&readfds);
-//             FD_SET(iL_socket_fd, &readfds);
-
-//             timeval tv{};
-//             tv.tv_sec = 0;
-//             tv.tv_usec = 0;
-
-//             int ret = select(iL_socket_fd + 1, &readfds, nullptr, nullptr, &tv);
-
-//             if (ret == 0)
-//                 return 0; // no data available now
-
-//             if (ret < 0)
-//                 return -1; // select error
-//         }
-
-//         // -----------------------------
-//         // Receive fixed 4-byte length
-//         // -----------------------------
-//         char len_buffer[5] = {0};
-//         int received = 0;
-
-//         while (received < 4)
-//         {
-//             int n = recv(iL_socket_fd,
-//                          len_buffer + received,
-//                          4 - received,
-//                          0);
-
-//             if (n == 0)
-//                 return -2; // disconnected
-
-//             if (n < 0)
-//             {
-// #ifdef _WIN32
-//                 return -1;
-// #else
-//                 if (errno == EINTR)
-//                     continue;
-
-//                 if (errno == EAGAIN || errno == EWOULDBLOCK)
-//                     return 0;
-
-//                 return -1;
-// #endif
-//             }
-
-//             received += n;
-//         }
-
-//         // -----------------------------
-//         // Convert length
-//         // -----------------------------
-//         int length = 0;
-
-//         try
-//         {
-//             length = std::stoi(len_buffer);
-//         }
-//         catch (...)
-//         {
-//             return -3; // invalid header
-//         }
-
-//         if (length <= 0)
-//             return -3;
-
-//         // -----------------------------
-//         // ACK back
-//         // -----------------------------
-//         int ack = send(iL_socket_fd, "OK", 2, 0);
-
-//         if (ack <= 0)
-//             return -2;
-
-//         // -----------------------------
-//         // Receive payload
-//         // -----------------------------
-//         std::vector<char> recvBuffer(length);
-//         int total = 0;
-
-//         while (total < length)
-//         {
-//             int n = recv(iL_socket_fd,
-//                          recvBuffer.data() + total,
-//                          length - total,
-//                          0);
-
-//             if (n == 0)
-//                 return -2; // disconnected mid-transfer
-
-//             if (n < 0)
-//             {
-// #ifdef _WIN32
-//                 return -1;
-// #else
-//                 if (errno == EINTR)
-//                     continue;
-
-//                 if (errno == EAGAIN || errno == EWOULDBLOCK)
-//                     continue;
-
-//                 return -1;
-// #endif
-//             }
-
-//             total += n;
-//         }
-
-//         buf.assign(recvBuffer.begin(), recvBuffer.end());
-
-//         return total;
-//     }
-// }
-
+int Socket::mcfn_sendDir(const std::string &buf, const size_t &cl_size, int arg)
+{
+    return send(iL_socket_fd, buf.c_str(), cl_size, arg);
+}
+int Socket::mcfn_recvDir(std::string &buf, const size_t &cl_size, int arg)
+{
+    char buffer[cl_size];
+    int res = recv(iL_socket_fd, buffer, cl_size, arg);
+    buf.assign(buffer);
+    return res;
+}
 int Socket::mcfn_recv(std::string &buf, bool blocking, size_t size)
 {
     std::lock_guard<std::mutex> lg(mu);
