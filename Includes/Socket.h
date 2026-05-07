@@ -29,12 +29,14 @@ class Socket
 {
     socket_t iL_socket_fd{};
     sockaddr_in address{};
+    int mei_port{};
+    std::string mes_IP{};
     std::mutex mu;
 
 public:
     Socket();
     ~Socket();
-    socket_t mcfn_create(const int &port);
+    socket_t mcfn_create(const int &port = -1);
     int mcfn_bind();
     int mcfn_listin(const int &maxCon);
     int mcfn_accept(Socket &client);
@@ -42,5 +44,7 @@ public:
     int mcfn_connect(const std::string &IP = "");
     int mcfn_send(const std::string &buf, size_t size = 0);
     int mcfn_recv(std::string &buf, bool blocking = true, size_t size = 0);
+    int mcfn_reconnect();
+    int mcfn_close();
 };
 #endif
