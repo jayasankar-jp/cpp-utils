@@ -1,6 +1,18 @@
 #include "Socket.h"
 #include "vector"
 #include <memory>
+
+#ifdef _WIN32
+
+#include <winsock2.h>
+#include <windows.h>
+
+#else
+
+#include <unistd.h>
+#include <fcntl.h>
+
+#endif
 #ifdef _WIN32
 #define CLOSE_SOCKET closesocket
 #else
@@ -15,13 +27,29 @@ socket_t Socket::mcfn_create(const int &port)
 
     try
     {
+        if (port != -1)
+        {
+            mei_port = port;
+        }
 #ifdef _WIN32
         WSADATA wsa;
         WSAStartup(MAKEWORD(2, 2), &wsa);
 #endif
         iL_socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+
+#ifdef _WIN32
+
+        SetHandleInformation((HANDLE)serverSocket,
+                             HANDLE_FLAG_INHERIT,
+                             0);
+
+#else
+
+        fcntl(iL_socket_fd, F_SETFD, FD_CLOEXEC);
+
+#endif
         address.sin_family = AF_INET;
-        address.sin_port = htons(port);
+        address.sin_port = htons(mei_port);
         address.sin_addr.s_addr = INADDR_ANY;
         return 1;
     }
@@ -126,9 +154,36 @@ int Socket::mcfn_connect(const std::string &IP)
 {
     try
     {
+        mes_IP = IP;
         if (IP != "")
         {
             if (inet_pton(AF_INET, IP.c_str(), &address.sin_addr) <= 0)
+            {
+                perror("Invalid address");
+                return 0;
+            }
+        }
+        if (connect(iL_socket_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
+        {
+            perror("Connection failed");
+            return 0;
+        }
+        return 1;
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << e.what() << '\n';
+        return -1;
+    }
+}
+int Socket::mcfn_reconnect()
+{
+    try
+    {
+        // mes_IP = IP;
+        if (mes_IP != "")
+        {
+            if (inet_pton(AF_INET, mes_IP.c_str(), &address.sin_addr) <= 0)
             {
                 perror("Invalid address");
                 return 0;
@@ -169,6 +224,24 @@ int Socket::mcfn_connect(const std::string &IP)
 //         return -1;
 //     }
 // }
+int Socket::mcfn_close()
+{
+    try
+    {
+        std::lock_guard<std::mutex> lg(mu);
+        if (iL_socket_fd != INVALID_SOCKET)
+        {
+            CLOSE_SOCKET(iL_socket_fd);
+            iL_socket_fd = INVALID_SOCKET;
+        }
+        return 1;
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << e.what() << '\n';
+        return -1;
+    }
+}
 int Socket::mcfn_send(const std::string &buf, size_t size)
 {
     try
@@ -185,12 +258,14 @@ int Socket::mcfn_send(const std::string &buf, size_t size)
             char len_buffer[4] = {0};
             snprintf(len_buffer, sizeof(len_buffer), "%03d", (int)buf.size());
 
-            send(iL_socket_fd, len_buffer, 4, 0);
-
+            int res = send(iL_socket_fd, len_buffer, 4, 0);
+            if (res <= 0)
+                return -1;
             // FIXED: safe ACK read
             char ack_buffer[3] = {0};
-            recv(iL_socket_fd, ack_buffer, 2, 0);
-
+            int rec_ack = recv(iL_socket_fd, ack_buffer, 2, 0);
+            if (rec_ack <= 0)
+                return -1;
             if (std::string(ack_buffer) == "OK")
             {
                 // FIXED: correct size + loop
