@@ -1,6 +1,18 @@
 #include "Socket.h"
 #include "vector"
 #include <memory>
+
+#ifdef _WIN32
+
+#include <winsock2.h>
+#include <windows.h>
+
+#else
+
+#include <unistd.h>
+#include <fcntl.h>
+
+#endif
 #ifdef _WIN32
 #define CLOSE_SOCKET closesocket
 #else
@@ -24,6 +36,18 @@ socket_t Socket::mcfn_create(const int &port)
         WSAStartup(MAKEWORD(2, 2), &wsa);
 #endif
         iL_socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+
+#ifdef _WIN32
+
+        SetHandleInformation((HANDLE)serverSocket,
+                             HANDLE_FLAG_INHERIT,
+                             0);
+
+#else
+
+        fcntl(iL_socket_fd, F_SETFD, FD_CLOEXEC);
+
+#endif
         address.sin_family = AF_INET;
         address.sin_port = htons(mei_port);
         address.sin_addr.s_addr = INADDR_ANY;
