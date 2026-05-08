@@ -273,16 +273,82 @@ int Socket::mcfn_send(const std::string &buf, size_t size)
     }
 }
 
-int Socket::mcfn_sendDir(const std::string &buf, const size_t &cl_size, int arg)
+ssize_t Socket::mcfn_sendDir(const std::string &buf, int flags)
 {
-    return send(iL_socket_fd, buf.c_str(), cl_size, arg);
+    return send(iL_socket_fd, buf.data(), buf.size(), flags);
 }
-int Socket::mcfn_recvDir(std::string &buf, const size_t &cl_size, int arg)
+int Socket::mcfn_recvDir(std::string &buf, size_t size, int flags)
 {
-    char buffer[cl_size];
-    int res = recv(iL_socket_fd, buffer, cl_size, arg);
-    buf.assign(buffer);
+    std::vector<char> buffer(size);
+
+    int res = recv(iL_socket_fd, buffer.data(), size, flags);
+
+    if (res > 0)
+    {
+        buf.assign(buffer.data(), res);
+    }
+    else
+    {
+        buf.clear();
+    }
+
     return res;
+}
+int Socket::mcfn_recvUntil(std::string &buf, char delimiter, int flags)
+{
+    buf.clear();
+
+    char ch;
+
+    while (true)
+    {
+        int res = recv(iL_socket_fd, &ch, 1, flags);
+
+        if (res <= 0)
+        {
+            return res;
+        }
+
+        buf.push_back(ch);
+
+        if (ch == delimiter)
+        {
+            break;
+        }
+    }
+
+    return buf.size();
+}
+int Socket::mcfn_recvAll(std::string &buf)
+{
+    buf.clear();
+
+    char temp[4096];
+
+    while (true)
+    {
+        int res = recv(iL_socket_fd, temp, sizeof(temp), MSG_DONTWAIT);
+
+        if (res > 0)
+        {
+            buf.append(temp, res);
+        }
+        else if (res == 0)
+        {
+            return 0;
+        }
+        else
+        {
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+            {
+                break;
+            }
+
+            return -1;
+        }
+    }
+
+    return buf.size();
 }
 int Socket::mcfn_recv(std::string &buf, bool blocking, size_t size)
 {

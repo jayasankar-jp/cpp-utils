@@ -44,8 +44,10 @@ public:
     int mcfn_connect(const std::string &IP = "");
     int mcfn_send(const std::string &buf, size_t size = 0);
     int mcfn_recv(std::string &buf, bool blocking = true, size_t size = 0);
-    int mcfn_sendDir(const std::string &buf, const size_t &cl_size, int arg = 0);
-    int mcfn_recvDir(std::string &buf, const size_t &cl_size, int arg = 0);
+    ssize_t mcfn_sendDir(const std::string &buf, int flags = 0);
+    int mcfn_recvDir(std::string &buf, size_t size, int flags = 0);
+    int mcfn_recvUntil(std::string &buf, char delimiter, int flags);
+    int mcfn_recvAll(std::string &buf);
     int mcfn_reconnect();
     int mcfn_close();
 };
