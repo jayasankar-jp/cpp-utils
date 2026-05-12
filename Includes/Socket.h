@@ -46,9 +46,12 @@ public:
     int mcfn_recv(std::string &buf, bool blocking = true, size_t size = 0);
     ssize_t mcfn_sendDir(const std::string &buf, int flags = 0);
     int mcfn_recvDir(std::string &buf, size_t size, int flags = 0);
+    ssize_t mcfn_sendDir(char *buffer, size_t size, int flags = 0);
+    int mcfn_recvDir(char *buffer, size_t size, int flags = 0);
     int mcfn_recvUntil(std::string &buf, char delimiter, int flags);
     int mcfn_recvAll(std::string &buf);
     int mcfn_reconnect();
     int mcfn_close();
+    socket_t mcfn_getSocketfd();
 };
 #endif

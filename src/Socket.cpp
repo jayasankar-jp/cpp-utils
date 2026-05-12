@@ -51,7 +51,7 @@ socket_t Socket::mcfn_create(const int &port)
         address.sin_family = AF_INET;
         address.sin_port = htons(mei_port);
         address.sin_addr.s_addr = INADDR_ANY;
-        return 1;
+        return iL_socket_fd;
     }
     catch (const std::exception &e)
     {
@@ -272,7 +272,14 @@ int Socket::mcfn_send(const std::string &buf, size_t size)
         return -1;
     }
 }
-
+ssize_t Socket::mcfn_sendDir(char *buffer, size_t size, int flags)
+{
+    return send(iL_socket_fd, buffer, size, flags);
+}
+int Socket::mcfn_recvDir(char *buffer, size_t size, int flags)
+{
+    return recv(iL_socket_fd, buffer, size, flags);
+}
 ssize_t Socket::mcfn_sendDir(const std::string &buf, int flags)
 {
     return send(iL_socket_fd, buf.data(), buf.size(), flags);
@@ -557,7 +564,10 @@ int Socket::mcfn_recv(std::string &buf, bool blocking, size_t size)
 
     return total;
 }
-
+socket_t Socket::mcfn_getSocketfd()
+{
+    return iL_socket_fd;
+}
 Socket::~Socket()
 {
 
