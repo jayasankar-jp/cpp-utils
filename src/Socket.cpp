@@ -6,9 +6,12 @@
 
 #include <winsock2.h>
 #include <windows.h>
+// #include <winsock2.h>
+#pragma comment(lib, "ws2_32.lib")
 
 #else
 
+#include <poll.h>
 #include <unistd.h>
 #include <fcntl.h>
 
@@ -93,61 +96,223 @@ int Socket::mcfn_listin(const int &maxCon)
     }
     return -1;
 }
-int Socket::mcfn_accept(Socket &client)
-{
+// int Socket::mcfn_accept(Socket &client)
+// {
+//     try
+//     {
 
+//         sockaddr_in receive_addr;
+
+//         socklen_t addr_len = sizeof(receive_addr);
+
+//         int clientSocket = accept(iL_socket_fd,
+//                                   (struct sockaddr *)&receive_addr,
+//                                   &addr_len);
+//         if (clientSocket < 0)
+//         {
+//             std::cerr << "Failed to accept";
+//             return -1;
+//         }
+//         client.address = receive_addr;
+//         client.iL_socket_fd = clientSocket;
+//         return 1;
+//     }
+//     catch (const std::exception &e)
+//     {
+//         std::cerr << e.what() << '\n';
+//         return -2;
+//     }
+// }
+// int Socket::mcfn_accept(std::shared_ptr<Socket> &client)
+// {
+//     try
+//     {
+
+//         sockaddr_in receive_addr;
+
+//         socklen_t addr_len = sizeof(receive_addr);
+
+//         int clientSocket = accept(iL_socket_fd,
+//                                   (struct sockaddr *)&receive_addr,
+//                                   &addr_len);
+//         if (clientSocket < 0)
+//         {
+//             std::cerr << "Failed to accept";
+//             return -1;
+//         }
+//         client = std::make_shared<Socket>();
+
+//         client->address = receive_addr;
+//         client->iL_socket_fd = clientSocket;
+//         return 1;
+//     }
+//     catch (const std::exception &e)
+//     {
+//         std::cerr << e.what() << '\n';
+//         return -2;
+//     }
+// }
+
+int Socket::mcfn_accept(Socket &client, int timeout_ms)
+{
     try
     {
+        // timeout support
+        if (timeout_ms > 0)
+        {
+#ifdef _WIN32
+
+            fd_set readfds;
+            FD_ZERO(&readfds);
+            FD_SET(iL_socket_fd, &readfds);
+
+            timeval tv;
+            tv.tv_sec = timeout_ms / 1000;
+            tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+            int ret = select(
+                0,
+                &readfds,
+                nullptr,
+                nullptr,
+                &tv);
+
+#else
+
+            struct pollfd pfd;
+            pfd.fd = iL_socket_fd;
+            pfd.events = POLLIN;
+
+            int ret = poll(&pfd, 1, timeout_ms);
+
+#endif
+
+            // timeout
+            if (ret == 0)
+            {
+                return 0;
+            }
+
+            // select/poll error
+            if (ret < 0)
+            {
+                return -1;
+            }
+        }
 
         sockaddr_in receive_addr;
-
         socklen_t addr_len = sizeof(receive_addr);
 
-        int clientSocket = accept(iL_socket_fd,
-                                  (struct sockaddr *)&receive_addr,
-                                  &addr_len);
+#ifdef _WIN32
+        SOCKET clientSocket = accept(
+#else
+        int clientSocket = accept(
+#endif
+            iL_socket_fd,
+            (struct sockaddr *)&receive_addr,
+            &addr_len);
+
+#ifdef _WIN32
+        if (clientSocket == INVALID_SOCKET)
+#else
         if (clientSocket < 0)
+#endif
         {
-            std::cerr << "Failed to accept";
-            return -1;
+            return -2;
         }
+
         client.address = receive_addr;
         client.iL_socket_fd = clientSocket;
+
         return 1;
     }
     catch (const std::exception &e)
     {
         std::cerr << e.what() << '\n';
-        return -2;
+        return -3;
     }
 }
-int Socket::mcfn_accept(std::shared_ptr<Socket> &client)
+int Socket::mcfn_accept(
+    std::shared_ptr<Socket> &client,
+    int timeout_ms )
 {
     try
     {
+        // timeout support
+        if (timeout_ms > 0)
+        {
+#ifdef _WIN32
+
+            fd_set readfds;
+            FD_ZERO(&readfds);
+            FD_SET(iL_socket_fd, &readfds);
+
+            timeval tv;
+            tv.tv_sec = timeout_ms / 1000;
+            tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+            int ret = select(
+                0,
+                &readfds,
+                nullptr,
+                nullptr,
+                &tv);
+
+#else
+
+            struct pollfd pfd;
+            pfd.fd = iL_socket_fd;
+            pfd.events = POLLIN;
+
+            int ret = poll(&pfd, 1, timeout_ms);
+
+#endif
+
+            // timeout
+            if (ret == 0)
+            {
+                return 0;
+            }
+
+            // select/poll error
+            if (ret < 0)
+            {
+                return -1;
+            }
+        }
 
         sockaddr_in receive_addr;
-
         socklen_t addr_len = sizeof(receive_addr);
 
-        int clientSocket = accept(iL_socket_fd,
-                                  (struct sockaddr *)&receive_addr,
-                                  &addr_len);
+#ifdef _WIN32
+        SOCKET clientSocket = accept(
+#else
+        int clientSocket = accept(
+#endif
+            iL_socket_fd,
+            (struct sockaddr *)&receive_addr,
+            &addr_len);
+
+#ifdef _WIN32
+        if (clientSocket == INVALID_SOCKET)
+#else
         if (clientSocket < 0)
+#endif
         {
-            std::cerr << "Failed to accept";
-            return -1;
+            return -2;
         }
+
         client = std::make_shared<Socket>();
 
         client->address = receive_addr;
         client->iL_socket_fd = clientSocket;
+
         return 1;
     }
     catch (const std::exception &e)
     {
         std::cerr << e.what() << '\n';
-        return -2;
+        return -3;
     }
 }
 int Socket::mcfn_connect(const std::string &IP)

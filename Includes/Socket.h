@@ -39,8 +39,8 @@ public:
     socket_t mcfn_create(const int &port = -1);
     int mcfn_bind();
     int mcfn_listin(const int &maxCon);
-    int mcfn_accept(Socket &client);
-    int mcfn_accept(std::shared_ptr<Socket> &client);
+    int mcfn_accept(Socket &client, int timeout_ms = 0);
+    int mcfn_accept(std::shared_ptr<Socket> &client, int timeout_ms = 0);
     int mcfn_connect(const std::string &IP = "");
     int mcfn_send(const std::string &buf, size_t size = 0);
     int mcfn_recv(std::string &buf, bool blocking = true, size_t size = 0);
