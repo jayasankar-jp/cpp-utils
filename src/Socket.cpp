@@ -6,9 +6,12 @@
 
 #include <winsock2.h>
 #include <windows.h>
+// #include <winsock2.h>
+#pragma comment(lib, "ws2_32.lib")
 
 #else
 
+#include <poll.h>
 #include <unistd.h>
 #include <fcntl.h>
 
@@ -51,7 +54,7 @@ socket_t Socket::mcfn_create(const int &port)
         address.sin_family = AF_INET;
         address.sin_port = htons(mei_port);
         address.sin_addr.s_addr = INADDR_ANY;
-        return 1;
+        return iL_socket_fd;
     }
     catch (const std::exception &e)
     {
@@ -93,61 +96,223 @@ int Socket::mcfn_listin(const int &maxCon)
     }
     return -1;
 }
-int Socket::mcfn_accept(Socket &client)
-{
+// int Socket::mcfn_accept(Socket &client)
+// {
+//     try
+//     {
 
+//         sockaddr_in receive_addr;
+
+//         socklen_t addr_len = sizeof(receive_addr);
+
+//         int clientSocket = accept(iL_socket_fd,
+//                                   (struct sockaddr *)&receive_addr,
+//                                   &addr_len);
+//         if (clientSocket < 0)
+//         {
+//             std::cerr << "Failed to accept";
+//             return -1;
+//         }
+//         client.address = receive_addr;
+//         client.iL_socket_fd = clientSocket;
+//         return 1;
+//     }
+//     catch (const std::exception &e)
+//     {
+//         std::cerr << e.what() << '\n';
+//         return -2;
+//     }
+// }
+// int Socket::mcfn_accept(std::shared_ptr<Socket> &client)
+// {
+//     try
+//     {
+
+//         sockaddr_in receive_addr;
+
+//         socklen_t addr_len = sizeof(receive_addr);
+
+//         int clientSocket = accept(iL_socket_fd,
+//                                   (struct sockaddr *)&receive_addr,
+//                                   &addr_len);
+//         if (clientSocket < 0)
+//         {
+//             std::cerr << "Failed to accept";
+//             return -1;
+//         }
+//         client = std::make_shared<Socket>();
+
+//         client->address = receive_addr;
+//         client->iL_socket_fd = clientSocket;
+//         return 1;
+//     }
+//     catch (const std::exception &e)
+//     {
+//         std::cerr << e.what() << '\n';
+//         return -2;
+//     }
+// }
+
+int Socket::mcfn_accept(Socket &client, int timeout_ms)
+{
     try
     {
+        // timeout support
+        if (timeout_ms > 0)
+        {
+#ifdef _WIN32
+
+            fd_set readfds;
+            FD_ZERO(&readfds);
+            FD_SET(iL_socket_fd, &readfds);
+
+            timeval tv;
+            tv.tv_sec = timeout_ms / 1000;
+            tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+            int ret = select(
+                0,
+                &readfds,
+                nullptr,
+                nullptr,
+                &tv);
+
+#else
+
+            struct pollfd pfd;
+            pfd.fd = iL_socket_fd;
+            pfd.events = POLLIN;
+
+            int ret = poll(&pfd, 1, timeout_ms);
+
+#endif
+
+            // timeout
+            if (ret == 0)
+            {
+                return 0;
+            }
+
+            // select/poll error
+            if (ret < 0)
+            {
+                return -1;
+            }
+        }
 
         sockaddr_in receive_addr;
-
         socklen_t addr_len = sizeof(receive_addr);
 
-        int clientSocket = accept(iL_socket_fd,
-                                  (struct sockaddr *)&receive_addr,
-                                  &addr_len);
+#ifdef _WIN32
+        SOCKET clientSocket = accept(
+#else
+        int clientSocket = accept(
+#endif
+            iL_socket_fd,
+            (struct sockaddr *)&receive_addr,
+            &addr_len);
+
+#ifdef _WIN32
+        if (clientSocket == INVALID_SOCKET)
+#else
         if (clientSocket < 0)
+#endif
         {
-            std::cerr << "Failed to accept";
-            return -1;
+            return -2;
         }
+
         client.address = receive_addr;
         client.iL_socket_fd = clientSocket;
+
         return 1;
     }
     catch (const std::exception &e)
     {
         std::cerr << e.what() << '\n';
-        return -2;
+        return -3;
     }
 }
-int Socket::mcfn_accept(std::shared_ptr<Socket> &client)
+int Socket::mcfn_accept(
+    std::shared_ptr<Socket> &client,
+    int timeout_ms )
 {
     try
     {
+        // timeout support
+        if (timeout_ms > 0)
+        {
+#ifdef _WIN32
+
+            fd_set readfds;
+            FD_ZERO(&readfds);
+            FD_SET(iL_socket_fd, &readfds);
+
+            timeval tv;
+            tv.tv_sec = timeout_ms / 1000;
+            tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+            int ret = select(
+                0,
+                &readfds,
+                nullptr,
+                nullptr,
+                &tv);
+
+#else
+
+            struct pollfd pfd;
+            pfd.fd = iL_socket_fd;
+            pfd.events = POLLIN;
+
+            int ret = poll(&pfd, 1, timeout_ms);
+
+#endif
+
+            // timeout
+            if (ret == 0)
+            {
+                return 0;
+            }
+
+            // select/poll error
+            if (ret < 0)
+            {
+                return -1;
+            }
+        }
 
         sockaddr_in receive_addr;
-
         socklen_t addr_len = sizeof(receive_addr);
 
-        int clientSocket = accept(iL_socket_fd,
-                                  (struct sockaddr *)&receive_addr,
-                                  &addr_len);
+#ifdef _WIN32
+        SOCKET clientSocket = accept(
+#else
+        int clientSocket = accept(
+#endif
+            iL_socket_fd,
+            (struct sockaddr *)&receive_addr,
+            &addr_len);
+
+#ifdef _WIN32
+        if (clientSocket == INVALID_SOCKET)
+#else
         if (clientSocket < 0)
+#endif
         {
-            std::cerr << "Failed to accept";
-            return -1;
+            return -2;
         }
+
         client = std::make_shared<Socket>();
 
         client->address = receive_addr;
         client->iL_socket_fd = clientSocket;
+
         return 1;
     }
     catch (const std::exception &e)
     {
         std::cerr << e.what() << '\n';
-        return -2;
+        return -3;
     }
 }
 int Socket::mcfn_connect(const std::string &IP)
@@ -202,28 +367,7 @@ int Socket::mcfn_reconnect()
         return -1;
     }
 }
-// int Socket::mcfn_send(const std::string &buf)
-// {
-//     try
-//     {
-//         std::lock_guard<std::mutex> lg(mu);
-//         std::string len = std::to_string(buf.length());
-//         send(iL_socket_fd, len.c_str(), 4, 0);
-//         char ack_buffer[4];
-//         int bytes = recv(iL_socket_fd, ack_buffer, 4, 0);
-//         if (std::string(ack_buffer) == "OK")
-//         {
-//             send(iL_socket_fd, buf.c_str(), sizeof(buf.c_str()), 0);
-//         }
-//         return 1;
-//         // send(iL_socket_fd, buff.c_str(), msg.size(), 0)
-//     }
-//     catch (const std::exception &e)
-//     {
-//         std::cerr << e.what() << '\n';
-//         return -1;
-//     }
-// }
+
 int Socket::mcfn_close()
 {
     try
@@ -293,146 +437,91 @@ int Socket::mcfn_send(const std::string &buf, size_t size)
         return -1;
     }
 }
+ssize_t Socket::mcfn_sendDir(char *buffer, size_t size, int flags)
+{
+    return send(iL_socket_fd, buffer, size, flags);
+}
+int Socket::mcfn_recvDir(char *buffer, size_t size, int flags)
+{
+    return recv(iL_socket_fd, buffer, size, flags);
+}
+ssize_t Socket::mcfn_sendDir(const std::string &buf, int flags)
+{
+    return send(iL_socket_fd, buf.data(), buf.size(), flags);
+}
+int Socket::mcfn_recvDir(std::string &buf, size_t size, int flags)
+{
+    std::vector<char> buffer(size);
 
-// int Socket::mcfn_recv(std::string &buf, bool blocking, size_t size)
-// {
-//     std::lock_guard<std::mutex> lg(mu);
+    int res = recv(iL_socket_fd, buffer.data(), size, flags);
 
-//     buf.clear();
+    if (res > 0)
+    {
+        buf.assign(buffer.data(), res);
+    }
+    else
+    {
+        buf.clear();
+    }
 
-//     if (size > 0)
-//     {
-//         char buff[size];
-//         int res = recv(iL_socket_fd,
-//                        buff, sizeof(size),
-//                        0);
+    return res;
+}
+int Socket::mcfn_recvUntil(std::string &buf, char delimiter, int flags)
+{
+    buf.clear();
 
-//         buf.assign(buff);
-//         return res;
-//     }
-//     else
-//     {
-//         // -----------------------------
-//         // Optional non-blocking check
-//         // -----------------------------
-//         if (!blocking)
-//         {
-//             fd_set readfds;
-//             FD_ZERO(&readfds);
-//             FD_SET(iL_socket_fd, &readfds);
+    char ch;
 
-//             timeval tv{};
-//             tv.tv_sec = 0;
-//             tv.tv_usec = 0;
+    while (true)
+    {
+        int res = recv(iL_socket_fd, &ch, 1, flags);
 
-//             int ret = select(iL_socket_fd + 1, &readfds, nullptr, nullptr, &tv);
+        if (res <= 0)
+        {
+            return res;
+        }
 
-//             if (ret == 0)
-//                 return 0; // no data available now
+        buf.push_back(ch);
 
-//             if (ret < 0)
-//                 return -1; // select error
-//         }
+        if (ch == delimiter)
+        {
+            break;
+        }
+    }
 
-//         // -----------------------------
-//         // Receive fixed 4-byte length
-//         // -----------------------------
-//         char len_buffer[5] = {0};
-//         int received = 0;
+    return buf.size();
+}
+int Socket::mcfn_recvAll(std::string &buf)
+{
+    buf.clear();
 
-//         while (received < 4)
-//         {
-//             int n = recv(iL_socket_fd,
-//                          len_buffer + received,
-//                          4 - received,
-//                          0);
+    char temp[4096];
 
-//             if (n == 0)
-//                 return -2; // disconnected
+    while (true)
+    {
+        int res = recv(iL_socket_fd, temp, sizeof(temp), MSG_DONTWAIT);
 
-//             if (n < 0)
-//             {
-// #ifdef _WIN32
-//                 return -1;
-// #else
-//                 if (errno == EINTR)
-//                     continue;
+        if (res > 0)
+        {
+            buf.append(temp, res);
+        }
+        else if (res == 0)
+        {
+            return 0;
+        }
+        else
+        {
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+            {
+                break;
+            }
 
-//                 if (errno == EAGAIN || errno == EWOULDBLOCK)
-//                     return 0;
+            return -1;
+        }
+    }
 
-//                 return -1;
-// #endif
-//             }
-
-//             received += n;
-//         }
-
-//         // -----------------------------
-//         // Convert length
-//         // -----------------------------
-//         int length = 0;
-
-//         try
-//         {
-//             length = std::stoi(len_buffer);
-//         }
-//         catch (...)
-//         {
-//             return -3; // invalid header
-//         }
-
-//         if (length <= 0)
-//             return -3;
-
-//         // -----------------------------
-//         // ACK back
-//         // -----------------------------
-//         int ack = send(iL_socket_fd, "OK", 2, 0);
-
-//         if (ack <= 0)
-//             return -2;
-
-//         // -----------------------------
-//         // Receive payload
-//         // -----------------------------
-//         std::vector<char> recvBuffer(length);
-//         int total = 0;
-
-//         while (total < length)
-//         {
-//             int n = recv(iL_socket_fd,
-//                          recvBuffer.data() + total,
-//                          length - total,
-//                          0);
-
-//             if (n == 0)
-//                 return -2; // disconnected mid-transfer
-
-//             if (n < 0)
-//             {
-// #ifdef _WIN32
-//                 return -1;
-// #else
-//                 if (errno == EINTR)
-//                     continue;
-
-//                 if (errno == EAGAIN || errno == EWOULDBLOCK)
-//                     continue;
-
-//                 return -1;
-// #endif
-//             }
-
-//             total += n;
-//         }
-
-//         buf.assign(recvBuffer.begin(), recvBuffer.end());
-
-//         return total;
-//     }
-// }
-
+    return buf.size();
+}
 int Socket::mcfn_recv(std::string &buf, bool blocking, size_t size)
 {
     std::lock_guard<std::mutex> lg(mu);
@@ -640,7 +729,10 @@ int Socket::mcfn_recv(std::string &buf, bool blocking, size_t size)
 
     return total;
 }
-
+socket_t Socket::mcfn_getSocketfd()
+{
+    return iL_socket_fd;
+}
 Socket::~Socket()
 {
 
