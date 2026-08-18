@@ -80,12 +80,13 @@ void test_multithreaded_producer_consumer()
     // Spawn producers
     for (int p = 0; p < NUM_PRODUCERS; ++p)
     {
-        producers.emplace_back([&q, p]() {
+        producers.emplace_back([&q, p, ITEMS_PER_PRODUCER]() {
             for (int i = 0; i < ITEMS_PER_PRODUCER; ++i)
             {
                 q.insert(p * ITEMS_PER_PRODUCER + i);
             }
         });
+
     }
 
     // Spawn consumers
