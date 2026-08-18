@@ -178,7 +178,7 @@ jobs:
           echo "VERSION=${VER}" >> $GITHUB_ENV
 
       - name: Run Build, Test, Install & Packaging on ARM Runner (${{ matrix.arch }})
-        uses: uraimo/run-on-arch-action@v2
+        uses: uraimo/run-on-arch-action@v2.8.0
         with:
           arch: ${{ matrix.arch }}
           distro: ${{ matrix.distro }}
@@ -189,13 +189,15 @@ jobs:
             apt-get update
             apt-get install -y cmake g++ make tar
           run: |
-            cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-O1" -DCMAKE_INSTALL_PREFIX=/tmp/install_dir
-            cmake --build build -- -j 1
+            ulimit -s unlimited || true
+            cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-O0" -DCMAKE_INSTALL_PREFIX=/tmp/install_dir
+            cmake --build build
             ctest --test-dir build --output-on-failure
             cmake --install build
 
             cd /tmp
             tar -czvf cpp-utils-v${VERSION}-raspberrypi-${{ matrix.arch }}.tar.gz -C install_dir .
+
 
       - name: Upload Versioned Raspberry Pi Tarball
         uses: actions/upload-artifact@v4
