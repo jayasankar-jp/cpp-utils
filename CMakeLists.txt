@@ -118,13 +118,18 @@ target_include_directories(internalLib
         $<INSTALL_INTERFACE:include>
 )
 
+find_package(Threads REQUIRED)
 target_link_libraries(internalLib PUBLIC Threads::Threads)
 
-find_package(Threads REQUIRED)
+if(WIN32)
+    target_link_libraries(internalLib PUBLIC ws2_32)
+endif()
 
 # ==========================
 # Test Apps
 # ==========================
+enable_testing()
+
 add_executable(server.exe test/test_socket.cpp)
 target_compile_definitions(server.exe PRIVATE SERVER)
 target_link_libraries(server.exe PRIVATE internalLib)
@@ -135,9 +140,12 @@ target_link_libraries(client.exe PRIVATE internalLib)
 
 add_executable(test_queue.exe test/test_queue.cpp)
 target_link_libraries(test_queue.exe PRIVATE internalLib)
+add_test(NAME test_queue COMMAND test_queue.exe)
 
 add_executable(test_socket_unit.exe test/test_socket_unit.cpp)
 target_link_libraries(test_socket_unit.exe PRIVATE internalLib)
+add_test(NAME test_socket_unit COMMAND test_socket_unit.exe)
+
 
 
 
