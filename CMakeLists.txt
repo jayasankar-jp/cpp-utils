@@ -133,6 +133,14 @@ add_executable(client.exe test/test_socket.cpp)
 target_compile_definitions(client.exe PRIVATE CLIENT)
 target_link_libraries(client.exe PRIVATE internalLib)
 
+add_executable(test_queue.exe test/test_queue.cpp)
+target_link_libraries(test_queue.exe PRIVATE internalLib)
+
+add_executable(test_socket_unit.exe test/test_socket_unit.cpp)
+target_link_libraries(test_socket_unit.exe PRIVATE internalLib)
+
+
+
 # ==========================
 # Install
 # ==========================
