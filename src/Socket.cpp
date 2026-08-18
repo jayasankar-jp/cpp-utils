@@ -1,6 +1,8 @@
 #include "Socket.h"
-#include "vector"
+#include <vector>
 #include <memory>
+#include <string>
+
 
 #ifdef _WIN32
 

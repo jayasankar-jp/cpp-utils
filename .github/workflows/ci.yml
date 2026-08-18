@@ -100,7 +100,7 @@ jobs:
             pkg_cmd: apt-get update && apt-get install -y cmake build-essential tar git
           - distro: fedora-latest
             image: fedora:latest
-            pkg_cmd: dnf groupinstall -y "Development Tools" && dnf install -y cmake gcc-c++ tar git
+            pkg_cmd: dnf install -y cmake gcc-c++ make tar git
           - distro: alpine-latest
             image: alpine:latest
             pkg_cmd: apk add --no-cache cmake make g++ build-base linux-headers tar git bash
@@ -190,7 +190,7 @@ jobs:
             apt-get install -y cmake g++ make tar
           run: |
             cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/tmp/install_dir
-            cmake --build build
+            cmake --build build -- -j 1
             ctest --test-dir build --output-on-failure
             cmake --install build
             cd /tmp

@@ -3,10 +3,16 @@
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <basetsd.h>
 #pragma comment(lib, "ws2_32.lib")
 
 using socket_t = SOCKET;
 using socklen_t = int;
+using ssize_t = SSIZE_T;
+
+#ifndef MSG_DONTWAIT
+#define MSG_DONTWAIT 0
+#endif
 
 #else
 #include <unistd.h>
@@ -25,6 +31,8 @@ using socket_t = int;
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <string>
+
 class Socket
 {
     socket_t iL_socket_fd{};
