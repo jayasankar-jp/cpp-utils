@@ -1,18 +1,19 @@
 #ifndef __MY_LIB_QUEUE__
 #define __MY_LIB_QUEUE__
+
 #include <iostream>
-#include <list>
+#include <deque>
 #include <mutex>
 #include <condition_variable>
-#include <atomic>
+#include <chrono>
+#include <utility>
+
 template <typename T>
 class Queue
 {
     std::mutex mu;
     std::condition_variable cv;
-    std::list<T> data;
-
-    // std::atomic<bool> b_shutdown{false};
+    std::deque<T> data;
     bool b_shutdown = false;
 
 public:
@@ -29,48 +30,47 @@ public:
     {
         close();
     }
+
     bool insert(const T &cl_data)
     {
-        try
         {
+            std::lock_guard<std::mutex> lg(mu);
+            if (b_shutdown)
+                return false;
 
-            {
-                std::lock_guard<std::mutex> lg(mu);
-                if (b_shutdown)
-                    return false;
-
-                data.push_back(cl_data);
-            }
-            cv.notify_one();
-            return true;
+            data.push_back(cl_data);
         }
-        catch (...)
-        {
-            return false;
-        }
+        cv.notify_one();
         return true;
     }
+
     bool insert(T &&cl_data)
     {
-        try
         {
+            std::lock_guard<std::mutex> lg(mu);
+            if (b_shutdown)
+                return false;
 
-            {
-                std::lock_guard<std::mutex> lg(mu);
-                if (b_shutdown)
-                    return false;
-
-                data.push_back(std::move(cl_data));
-            }
-            cv.notify_one();
-            return true;
+            data.push_back(std::move(cl_data));
         }
-        catch (...)
-        {
-            return false;
-        }
+        cv.notify_one();
         return true;
     }
+
+    template <typename... Args>
+    bool emplace(Args&&... args)
+    {
+        {
+            std::lock_guard<std::mutex> lg(mu);
+            if (b_shutdown)
+                return false;
+
+            data.emplace_back(std::forward<Args>(args)...);
+        }
+        cv.notify_one();
+        return true;
+    }
+
     bool getTop(T &cl_data)
     {
         std::lock_guard<std::mutex> lg(mu);
@@ -81,11 +81,13 @@ public:
         cl_data = data.front();
         return true;
     }
+
     size_t getCount()
     {
         std::lock_guard<std::mutex> lg(mu);
         return data.size();
     }
+
     bool getElement(T &cl_data, int isWait = 0)
     {
         if (isWait == 0)
@@ -97,13 +99,12 @@ public:
                 return false;
             cl_data = std::move(data.front());
             data.pop_front();
-
             return true;
         }
         else if (isWait == 1)
         {
             std::lock_guard<std::mutex> lg(mu);
-            if (data.empty())
+            if (data.empty() )
             {
                 return false;
             }
@@ -124,10 +125,10 @@ public:
                 return false;
             cl_data = std::move(data.front());
             data.pop_front();
-
             return true;
         }
     }
+
     Queue() = default;
     Queue(const Queue &) = delete;
     Queue &operator=(const Queue &) = delete;

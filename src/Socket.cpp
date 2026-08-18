@@ -42,7 +42,7 @@ socket_t Socket::mcfn_create(const int &port)
 
 #ifdef _WIN32
 
-        SetHandleInformation((HANDLE)serverSocket,
+        SetHandleInformation((HANDLE)iL_socket_fd,
                              HANDLE_FLAG_INHERIT,
                              0);
 
@@ -221,6 +221,7 @@ int Socket::mcfn_accept(Socket &client, int timeout_ms)
             return -2;
         }
 
+        client.mcfn_close(); // Prevent FD leak if client was previously open
         client.address = receive_addr;
         client.iL_socket_fd = clientSocket;
 
@@ -372,11 +373,25 @@ int Socket::mcfn_close()
 {
     try
     {
-        std::lock_guard<std::mutex> lg(mu);
-        if (iL_socket_fd != INVALID_SOCKET)
+        socket_t fd = INVALID_SOCKET;
         {
-            CLOSE_SOCKET(iL_socket_fd);
-            iL_socket_fd = INVALID_SOCKET;
+            std::lock_guard<std::mutex> lg1(send_mu);
+            std::lock_guard<std::mutex> lg2(recv_mu);
+            if (iL_socket_fd != INVALID_SOCKET)
+            {
+                fd = iL_socket_fd;
+                iL_socket_fd = INVALID_SOCKET;
+            }
+        }
+        if (fd != INVALID_SOCKET)
+        {
+#ifdef _WIN32
+            shutdown(fd, SD_BOTH);
+            CLOSE_SOCKET(fd);
+#else
+            shutdown(fd, SHUT_RDWR);
+            CLOSE_SOCKET(fd);
+#endif
         }
         return 1;
     }
@@ -390,10 +405,12 @@ int Socket::mcfn_send(const std::string &buf, size_t size)
 {
     try
     {
-        std::lock_guard<std::mutex> lg(mu);
+        std::lock_guard<std::mutex> lg(send_mu);
+        if (iL_socket_fd == INVALID_SOCKET)
+            return -1;
+
         if (size > 0)
         {
-            // char buffer[10000];
             send(iL_socket_fd, buf.c_str(), size, 0);
         }
         else
@@ -439,25 +456,42 @@ int Socket::mcfn_send(const std::string &buf, size_t size)
 }
 ssize_t Socket::mcfn_sendDir(char *buffer, size_t size, int flags)
 {
+    if (iL_socket_fd == INVALID_SOCKET)
+        return -1;
     return send(iL_socket_fd, buffer, size, flags);
 }
 int Socket::mcfn_recvDir(char *buffer, size_t size, int flags)
 {
+    if (iL_socket_fd == INVALID_SOCKET)
+        return -1;
     return recv(iL_socket_fd, buffer, size, flags);
 }
 ssize_t Socket::mcfn_sendDir(const std::string &buf, int flags)
 {
+    if (iL_socket_fd == INVALID_SOCKET)
+        return -1;
     return send(iL_socket_fd, buf.data(), buf.size(), flags);
 }
 int Socket::mcfn_recvDir(std::string &buf, size_t size, int flags)
 {
-    std::vector<char> buffer(size);
+    if (iL_socket_fd == INVALID_SOCKET)
+    {
+        buf.clear();
+        return -1;
+    }
+    if (size == 0)
+    {
+        buf.clear();
+        return 0;
+    }
 
-    int res = recv(iL_socket_fd, buffer.data(), size, flags);
+    buf.resize(size);
+
+    int res = recv(iL_socket_fd, &buf[0], size, flags);
 
     if (res > 0)
     {
-        buf.assign(buffer.data(), res);
+        buf.resize(res);
     }
     else
     {
@@ -469,6 +503,8 @@ int Socket::mcfn_recvDir(std::string &buf, size_t size, int flags)
 int Socket::mcfn_recvUntil(std::string &buf, char delimiter, int flags)
 {
     buf.clear();
+    if (iL_socket_fd == INVALID_SOCKET)
+        return -1;
 
     char ch;
 
@@ -494,6 +530,8 @@ int Socket::mcfn_recvUntil(std::string &buf, char delimiter, int flags)
 int Socket::mcfn_recvAll(std::string &buf)
 {
     buf.clear();
+    if (iL_socket_fd == INVALID_SOCKET)
+        return -1;
 
     char temp[4096];
 
@@ -524,57 +562,68 @@ int Socket::mcfn_recvAll(std::string &buf)
 }
 int Socket::mcfn_recv(std::string &buf, bool blocking, size_t size)
 {
-    std::lock_guard<std::mutex> lg(mu);
+    std::lock_guard<std::mutex> lg(recv_mu);
 
     buf.clear();
+    if (iL_socket_fd == INVALID_SOCKET)
+        return -1;
 
     // =====================================================
     // RAW RECEIVE MODE
     // =====================================================
     if (size > 0)
     {
-        std::vector<char> buff(size);
-
-        int res = recv(iL_socket_fd,
-                       buff.data(),
-                       (int)size,
-                       0);
-
-        if (res > 0)
-            buf.assign(buff.data(), res);
-        else if (res == 0)
-            return -2; // disconnected
-        else
+        while (true)
         {
+            buf.resize(size);
+
+            int res = recv(iL_socket_fd,
+                           &buf[0],
+                           (int)size,
+                           0);
+
+            if (res > 0)
+            {
+                buf.resize(res);
+                return res;
+            }
+            else if (res == 0)
+            {
+                buf.clear();
+                return -2; // disconnected
+            }
+            else
+            {
+                buf.clear();
 #ifdef _WIN32
-            int err = WSAGetLastError();
+                int err = WSAGetLastError();
 
-            if (!blocking && err == WSAEWOULDBLOCK)
-                return 0;
+                if (!blocking && err == WSAEWOULDBLOCK)
+                    return 0;
 
-            return -1;
+                return -1;
 #else
-            if (errno == EINTR)
-                return mcfn_recv(buf, blocking, size);
+                if (errno == EINTR)
+                    continue; // Loop instead of recursive self-call (prevents deadlock & stack overflow)
 
-            if (!blocking &&
-                (errno == EAGAIN || errno == EWOULDBLOCK))
-                return 0;
+                if (!blocking &&
+                    (errno == EAGAIN || errno == EWOULDBLOCK))
+                    return 0;
 
-            return -1;
+                return -1;
 #endif
+            }
         }
-
-        return res;
     }
 
     // =====================================================
     // PACKET MODE (4 BYTE HEADER + PAYLOAD)
     // =====================================================
 
-    // Non-blocking pre-check
+    // Non-blocking pre-check using poll to avoid select() FD_SETSIZE crash when fd >= 1024
     if (!blocking)
     {
+#ifdef _WIN32
         fd_set readfds;
         FD_ZERO(&readfds);
         FD_SET(iL_socket_fd, &readfds);
@@ -583,11 +632,14 @@ int Socket::mcfn_recv(std::string &buf, bool blocking, size_t size)
         tv.tv_sec = 0;
         tv.tv_usec = 0;
 
-        int ret = select(iL_socket_fd + 1,
-                         &readfds,
-                         nullptr,
-                         nullptr,
-                         &tv);
+        int ret = select(0, &readfds, nullptr, nullptr, &tv);
+#else
+        struct pollfd pfd;
+        pfd.fd = iL_socket_fd;
+        pfd.events = POLLIN;
+
+        int ret = poll(&pfd, 1, 0);
+#endif
 
         if (ret == 0)
             return 0; // no data
@@ -653,7 +705,8 @@ int Socket::mcfn_recv(std::string &buf, bool blocking, size_t size)
         return -3;
     }
 
-    if (length <= 0)
+    // Sanity check packet length (Max 64MB per packet to prevent OOM crash)
+    if (length <= 0 || length > 64 * 1024 * 1024)
         return -3;
 
     // -------------------------------------------------
@@ -683,15 +736,23 @@ int Socket::mcfn_recv(std::string &buf, bool blocking, size_t size)
     }
 
     // -------------------------------------------------
-    // Receive payload
+    // Receive payload safely
     // -------------------------------------------------
-    std::vector<char> recvBuffer(length);
+    try
+    {
+        buf.resize(length);
+    }
+    catch (const std::bad_alloc &)
+    {
+        return -3;
+    }
+
     int total = 0;
 
     while (total < length)
     {
         int n = recv(iL_socket_fd,
-                     recvBuffer.data() + total,
+                     &buf[total],
                      length - total,
                      0);
 
@@ -701,6 +762,7 @@ int Socket::mcfn_recv(std::string &buf, bool blocking, size_t size)
         }
         else if (n == 0)
         {
+            buf.clear();
             return -2; // disconnected
         }
         else
@@ -725,8 +787,6 @@ int Socket::mcfn_recv(std::string &buf, bool blocking, size_t size)
         }
     }
 
-    buf.assign(recvBuffer.begin(), recvBuffer.end());
-
     return total;
 }
 socket_t Socket::mcfn_getSocketfd()
@@ -735,12 +795,7 @@ socket_t Socket::mcfn_getSocketfd()
 }
 Socket::~Socket()
 {
-
-    if (iL_socket_fd != INVALID_SOCKET)
-    {
-        CLOSE_SOCKET(iL_socket_fd);
-        iL_socket_fd = INVALID_SOCKET;
-    }
+    mcfn_close();
 
 #ifdef _WIN32
     WSACleanup();
