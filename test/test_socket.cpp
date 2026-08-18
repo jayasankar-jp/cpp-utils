@@ -3,8 +3,19 @@
 #include <iostream>
 #include <thread>
 #include <Queue.h>
+
+#ifdef _WIN32
+#define strcasecmp _stricmp
+#endif
+
+#ifndef SERVER
 #define SERVER 0
+#endif
+
+#ifndef CLINET
 #define CLINET 1
+#endif
+
 int mode = SERVER;
 int port;
 Socket CG_Socket;

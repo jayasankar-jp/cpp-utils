@@ -68,9 +68,10 @@ void test_multithreaded_producer_consumer()
     std::cout << "[TEST] Running test_multithreaded_producer_consumer..." << std::endl;
     Queue<int> q;
 
-    const int NUM_PRODUCERS = 4;
-    const int NUM_CONSUMERS = 4;
-    const int ITEMS_PER_PRODUCER = 1000;
+    constexpr int NUM_PRODUCERS = 4;
+    constexpr int NUM_CONSUMERS = 4;
+    constexpr int ITEMS_PER_PRODUCER = 1000;
+
 
     std::vector<std::thread> producers;
     std::vector<std::thread> consumers;

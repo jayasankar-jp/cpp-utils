@@ -189,10 +189,11 @@ jobs:
             apt-get update
             apt-get install -y cmake g++ make tar
           run: |
-            cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/tmp/install_dir
+            cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-O1" -DCMAKE_INSTALL_PREFIX=/tmp/install_dir
             cmake --build build -- -j 1
             ctest --test-dir build --output-on-failure
             cmake --install build
+
             cd /tmp
             tar -czvf cpp-utils-v${VERSION}-raspberrypi-${{ matrix.arch }}.tar.gz -C install_dir .
 
