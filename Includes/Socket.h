@@ -31,11 +31,16 @@ class Socket
     sockaddr_in address{};
     int mei_port{};
     std::string mes_IP{};
-    std::mutex mu;
+    std::mutex send_mu;
+    std::mutex recv_mu;
+
 
 public:
     Socket();
     ~Socket();
+    Socket(const Socket &) = delete;
+    Socket &operator=(const Socket &) = delete;
+
     socket_t mcfn_create(const int &port = -1);
     int mcfn_bind();
     int mcfn_listin(const int &maxCon);
