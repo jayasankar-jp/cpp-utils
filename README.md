@@ -78,42 +78,181 @@ Recommended:
 
 ---
 
-# Installation
+## Option A: Quick One-Liner Commands (`wget` / `curl`)
 
-## Clone Repository
+### Quick Download & Build on Linux / Raspberry Pi:
+```bash
+# Download source tarball via wget, extract & build in one command
+wget -qO- https://github.com/jayasankar-jp/cpp-utils/archive/refs/heads/main.tar.gz | tar -xz && \
+cd cpp-utils-main && \
+cmake -B build -DCMAKE_BUILD_TYPE=Release && \
+cmake --build build -j$(nproc) && \
+sudo cmake --install build
+```
+
+### Quick Download via `curl`:
+```bash
+curl -L https://github.com/jayasankar-jp/cpp-utils/archive/refs/heads/main.tar.gz | tar -xz
+cd cpp-utils-main
+cmake -B build && cmake --build build
+```
+
+---
+
+## Option B: Download Pre-built Packages (GitHub Actions)
+
+Pre-built binaries, headers, and CMake config packages for **Linux distributions**, **Raspberry Pi**, and **Windows** are automatically archived on every commit/release with version and OS-based names:
+
+| Target Platform / Architecture | Package Archive Name | Format |
+| :--- | :--- | :--- |
+| **Ubuntu 22.04 (x86_64)** | `cpp-utils-v1.0.0-ubuntu-22.04-x86_64.tar.gz` | Tarball |
+| **Ubuntu 24.04 (x86_64)** | `cpp-utils-v1.0.0-ubuntu-24.04-x86_64.tar.gz` | Tarball |
+| **Debian Latest (x86_64)** | `cpp-utils-v1.0.0-debian-latest-x86_64.tar.gz` | Tarball |
+| **Fedora Latest (x86_64)** | `cpp-utils-v1.0.0-fedora-latest-x86_64.tar.gz` | Tarball |
+| **Alpine Linux (musl)** | `cpp-utils-v1.0.0-alpine-latest-x86_64.tar.gz` | Tarball |
+| **Arch Linux (x86_64)** | `cpp-utils-v1.0.0-archlinux-latest-x86_64.tar.gz` | Tarball |
+| **Raspberry Pi 32-bit (`armhf`)** | `cpp-utils-v1.0.0-raspberrypi-armv7.tar.gz` | Tarball |
+| **Raspberry Pi 64-bit (`aarch64`)** | `cpp-utils-v1.0.0-raspberrypi-aarch64.tar.gz` | Tarball |
+| **Windows MSVC (x64)** | `cpp-utils-v1.0.0-windows-latest-Release.zip` | Zip |
+
+### How to Install a Pre-built Package:
 
 ```bash
+# Example: Extracting pre-built Linux tarball system-wide
+sudo tar -xzvf cpp-utils-v1.0.0-ubuntu-22.04-x86_64.tar.gz -C /usr/local
+```
+
+---
+
+
+## Option B: Build & Install from Source
+
+### 1. Linux Installation (Ubuntu, Debian, Fedora, Alpine, Arch)
+
+```bash
+# Install build prerequisites (Ubuntu/Debian example)
+sudo apt update && sudo apt install -y cmake build-essential
+
+# Clone repository
 git clone https://github.com/jayasankar-jp/cpp-utils.git
 cd cpp-utils
+
+# Configure & Build
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
+
+# Run tests
+ctest --test-dir build --output-on-failure
+
+# Install system-wide (Installs to /usr/local/include & /usr/local/lib)
+sudo cmake --install build
 ```
 
 ---
 
-# Build from Source
+### 2. Raspberry Pi Installation (Raspberry Pi OS / ARM32 & ARM64)
 
 ```bash
-mkdir build
-cd build
-cmake ..
-make
+# Install build tools on Raspberry Pi OS
+sudo apt update && sudo apt install -y cmake g++ make
+
+# Clone repository
+git clone https://github.com/jayasankar-jp/cpp-utils.git
+cd cpp-utils
+
+# Configure & Build
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
+
+# Run tests
+ctest --test-dir build --output-on-failure
+
+# Install system-wide on Raspberry Pi
+sudo cmake --install build
 ```
 
 ---
 
-# Include in Your Project
+### 3. Windows Installation (MSVC / Visual Studio or MinGW)
 
-```cpp
-#include <Queue.h>
-#include <Socket.h>
+#### Method 1: Using Command Prompt / PowerShell (MSVC)
+
+```cmd
+:: Open Developer Command Prompt for Visual Studio
+git clone https://github.com/jayasankar-jp/cpp-utils.git
+cd cpp-utils
+
+:: Configure
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="C:/Program Files/internalLib"
+
+:: Build
+cmake --build build --config Release
+
+:: Run tests
+ctest --test-dir build -C Release --output-on-failure
+
+:: Install (Run Command Prompt as Administrator)
+cmake --install build --config Release
 ```
 
-If required:
+#### Method 2: Custom Directory (No Admin required)
 
-```bash
--IIncludes
+```cmd
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="C:/libs/cpp-utils"
+cmake --build build --config Release
+cmake --install build --config Release
 ```
 
 ---
+
+### Installed Files Structure
+
+When installed, the following files are placed in your system or installation prefix (`<prefix>`):
+
+```txt
+<prefix>/
+├── include/
+│   ├── Queue.h                  # Thread-safe queue header
+│   └── Socket.h                 # Socket wrapper header
+├── lib/                         # (or lib64 on 64-bit distros)
+│   ├── libinternalLib.a         # Static library (Linux / Raspberry Pi)
+│   ├── libinternalLib.so        # Shared library (Linux / Raspberry Pi)
+│   ├── internalLib.lib          # Static / Import library (Windows MSVC)
+│   └── cmake/
+│       └── internalLib/
+│           ├── internalLibConfig.cmake         # Package config for find_package()
+│           ├── internalLibConfigVersion.cmake  # Package version file
+│           └── internalLibTargets.cmake        # Target definitions
+└── bin/                         # (Windows DLL directory)
+    └── internalLib.dll          # Shared library DLL (Windows, if enabled)
+```
+
+---
+
+## Integration in Modern CMake Projects
+
+
+After installing `cpp-utils` (`internalLib`), you can easily consume it in any CMake project:
+
+### `CMakeLists.txt`
+
+```cmake
+cmake_minimum_required(VERSION 3.16)
+project(MyApplication CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+
+# Find the installed internalLib package
+find_package(internalLib REQUIRED)
+
+add_executable(my_app main.cpp)
+
+# Link internalLib target (automatically sets includes & libraries like Threads / Winsock)
+target_link_libraries(my_app PRIVATE internalLib::internalLib)
+```
+
+---
+
 
 # Project Structure
 
